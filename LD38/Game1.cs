@@ -32,7 +32,7 @@ namespace LD38
 
             
 
-            Window.AllowUserResizing = true;
+            //Window.AllowUserResizing = true;
             RestoreWindowLocation();
         }
 
@@ -111,7 +111,7 @@ namespace LD38
             curKeys = curKbdState.GetPressedKeys();
             if (lastMouse == null) lastMouse = curMouse;
             if (lastKeys == null) lastKeys = curKeys;
-            mouseCursor = mouse.Position;
+            mouseCursor = curMouse.Position;
 
             game.Update(gameTime);
 
@@ -148,11 +148,11 @@ namespace LD38
 
         public bool LeftClick()
         {
-
+            return curMouse.LeftButton == ButtonState.Pressed && lastMouse.LeftButton == ButtonState.Pressed;
         }
         public bool RightClick()
         {
-            return curMouse.RightButton == ButtonState.Pressed && lastMouse.RightButton == ButtonState.Pressed
+            return curMouse.RightButton == ButtonState.Pressed && lastMouse.RightButton == ButtonState.Pressed;
         }
 
 
@@ -165,18 +165,6 @@ namespace LD38
             Engine.g = GraphicsDevice;
             GraphicsDevice.Clear(Color.CornflowerBlue);
 
-            // TODO: Add your drawing code here
-            /*
-            VertexPositionColor[] vpc = new VertexPositionColor[3];
-            vpc[0].Position = new Vector3(-0.5f, 0.5f, 0.1f);
-            vpc[1].Position = new Vector3(0.5f, 0.5f, 0.1f);
-            vpc[2].Position = new Vector3(0f, 0f, 0.1f);
-            vpc[0].Color = Color.Red;
-            vpc[1].Color = Color.Green;
-            vpc[2].Color = Color.Blue;
-
-            Engine.Draw2DColor(vpc, 0, 1);
-            */
 
             game.Draw(gameTime);
 

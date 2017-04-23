@@ -15,7 +15,7 @@ namespace LD38
     /// </summary>
     class GameContext
     {
-        Game Parent;
+        Game1 Parent;
 
         GameMap Map;
         MapRenderer DrawMap;
@@ -25,7 +25,7 @@ namespace LD38
         Vector3 cameraLookAt;
         Texture2D MapTiles;
 
-        public GameContext(Game rootGame)
+        public GameContext(Game1 rootGame)
         {
             Parent = rootGame;
 
@@ -46,28 +46,27 @@ namespace LD38
 
         }
 
-        MouseState lastMouse;
-        Keys[] lastKeys;
         Point? tileHighlight = null;
 
 
         public void Update(GameTime gameTime)
         {
             // Handle some mouse input
-
+            MouseState mouse = Parent.curMouse;
+            MouseState lastMouse = Parent.lastMouse;
 
 
             if (Parent.IsActive)
             {
 
-                if (mouse.RightButton == ButtonState.Pressed && lastMouse.RightButton == ButtonState.Pressed)
+                if (Parent.RightClick())
                 {
                     int dx = mouse.X - lastMouse.X;
 
                     viewAngle += dx * 0.01f;
                     viewAngle = (float)(viewAngle - Math.Floor(viewAngle / Math.PI / 2) * Math.PI * 2);
                 }
-                if (mouse.LeftButton == ButtonState.Pressed && lastMouse.LeftButton == ButtonState.Pressed)
+                if (Parent.LeftClick())
                 {
                     int dx = mouse.X - lastMouse.X;
                     int dy = mouse.Y - lastMouse.Y;
@@ -96,11 +95,8 @@ namespace LD38
 
 
 
-                foreach (Keys k in keys)
+                foreach (Keys k in Parent.PressedKeys())
                 {
-                    if (lastKeys.Contains(k)) continue;
-
-
 
                     // Do some basic map editing
                     if (tileHighlight == null) continue;
@@ -136,8 +132,6 @@ namespace LD38
                 viewAngle = (float)(viewAngle - Math.Floor(viewAngle / Math.PI / 2) * Math.PI * 2);
             }
 
-            lastMouse = mouse;
-            lastKeys = keys;
         }
 
         Vector2 CameraForward()
