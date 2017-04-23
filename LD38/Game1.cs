@@ -37,6 +37,7 @@ namespace LD38
         public void StartGame()
         {
             ActiveContext = game;
+            game.SetupGame(Content, "Maps/Map1.mp");
         }
         public void StartMapEditor()
         {

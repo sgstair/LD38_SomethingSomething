@@ -79,6 +79,7 @@
     <None Include="app.config" />
     <None Include="app.manifest" />
     <None Include="Content\font\Font.spritefont" />
+    <None Include="Content\Maps\Map1.mp" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>

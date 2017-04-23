@@ -28,7 +28,102 @@ namespace LD38
         {
             CameraLoc = location;
             CameraLookAt = lookAt;
+
+            // Setup engine for camera
+
+            Engine.MatPerspective = Matrix.CreatePerspectiveFieldOfView((float)(Math.PI / 2), Engine.AspectRatio, 0.5f, 30) * Matrix.CreateScale(-1, 1, 1);
+            Engine.MatWorld = Matrix.Identity;
+            Engine.MatView = Matrix.CreateLookAt(location, lookAt, Vector3.UnitZ);
+
+            BlendState bs = new BlendState();
+
+            bs.ColorBlendFunction = BlendFunction.Add;
+            bs.ColorSourceBlend = Blend.SourceAlpha;
+            bs.ColorDestinationBlend = Blend.InverseSourceAlpha;
+
+            Engine.g.BlendState = bs;
+            Engine.g.DepthStencilState = DepthStencilState.Default;
+
         }
+
+
+
+        public Point? FindIntersectingPoint(Vector3 origin, Vector3 direction)
+        {
+            Vector3 loc = FindIntersectingLocation(origin, direction);
+            if (IsInsideMap(loc))
+            {
+                return new Point((int)Math.Floor(loc.X), (int)Math.Floor(loc.Y));
+            }
+            return null;
+        }
+
+        public bool IsInsideMap(Vector3 location)
+        {
+            if (location.X < 0 || location.Y < 0 || location.X >= Map.Width || location.Y >= Map.Height) return false;
+            return true;
+        }
+
+        public Vector3 FindIntersectingLocation(Vector3 origin, Vector3 direction)
+        {
+            if (direction.Z >= 0) return Vector3.UnitX * -1;
+
+            for (int i = Map.MaxLayer; i >= 0; i--)
+            {
+                float z = i * Map.LayerHeight;
+                if (z >= origin.Z) continue;
+
+                float dz = origin.Z - z;
+
+                Vector3 intersection = origin - direction * (dz / direction.Z);
+                int tx = (int)Math.Floor(intersection.X);
+                int ty = (int)Math.Floor(intersection.Y);
+
+                if (tx >= 0 && ty >= 0 && tx < Map.Width && ty < Map.Height)
+                {
+                    if (Map.Tiles[tx, ty].Level == i)
+                    {
+                        intersection.Z = Map.MapHeight(intersection.X, intersection.Y);
+                        return intersection;
+                    }
+                }
+                // Todo: need to add some future logic to also correctly select when not pointing at a tile rectangle itself (slopes, cliffs)
+            }
+            return Vector3.UnitX * -1; // Effectively "nothing"
+        }
+
+        public Vector3 FindIntersectingLocation(Point screenLocation)
+        {
+            return FindIntersectingLocation(CameraLoc, MouseRay(screenLocation));
+        }
+
+        public Vector3 ProjectOntoPlane(Point screenLocation, float zPlane)
+        {
+            Vector3 Loc = CameraLoc;
+            Vector3 ray = MouseRay(screenLocation);
+
+            float zDist = Loc.Z - zPlane;
+            Loc += ray * (zDist / ray.Z);
+
+            return Loc;
+        }
+
+        public Vector3 MouseRay(Point screenLocation)
+        {
+            int height = Engine.g.PresentationParameters.BackBufferHeight;
+            int width = Engine.g.PresentationParameters.BackBufferWidth;
+            float tx = (float)(screenLocation.X - width / 2) / (width / 2);
+            float ty = (float)(screenLocation.Y - height / 2) / (height / 2);
+            Vector3 cameraLoc = CameraLoc;
+            Vector3 forward = CameraLookAt - cameraLoc;
+            forward.Normalize();
+            Vector3 right = Vector3.Cross(Vector3.UnitZ, forward);
+            Vector3 up = Vector3.Cross(forward, right);
+            right.Normalize();
+            up.Normalize();
+            return forward - up * ty + right * tx * Engine.AspectRatio;
+        }
+
 
         public void DrawMap()
         {
@@ -144,36 +239,64 @@ namespace LD38
         public void DrawTileHighlight(int x, int y)
         {
             float z = Map.Tiles[x, y].Level;
-            RenderFlatQuad(x, y, x + 1, y + 1, z + 0.05f, true);
+            RenderFlatQuad(x, y, x + 1, y + 1, z + 0.05f, new Color(127, 255, 192, 128));
+        }
+        public void DrawTileHighlight(int x, int y, Color c)
+        {
+            float z = Map.Tiles[x, y].Level;
+            RenderFlatQuad(x, y, x + 1, y + 1, z + 0.05f, c);
         }
 
-        public Point? FindIntersectingPoint(Vector3 origin, Vector3 direction)
+
+
+        public void DrawSelectionCursor(Vector3 location, float size, Color c, float zBoost = 0)
         {
-            if (direction.Z >= 0) return null;
+            // Reuse storage quad because it's perfect.
+            WorkMesh.Clear();
+            int tile = 0x04;
 
-            for(int i=Map.MaxLayer;i>= 0;i--)
+            float z = location.Z + 0.015f + zBoost;
+            float x = location.X;
+            float y = location.Y;
+            float half = size / 2;
+            WorkMesh.AddRampQuadColor(tile, x - half, y - half, x + half, y + half, z, z, z, z, 0, c);
+
+            WorkMesh.RenderOut();
+        }
+
+        public void DrawTileIcon(int tileID, Point screenLocation, float size, Color c)
+        {
+            float dtx = 0.001f;
+            float dt = 16.0f / MapTexture.Width;
+            float tx = (tileID & 0xFF) * dt;
+            float ty = (tileID >> 8) * dt;
+
+            VertexPositionColorTexture[] vpct = new VertexPositionColorTexture[4];
+
+            for (int i = 0; i < 4; i++)
             {
-                float z = i * Map.LayerHeight;
-                if (z >= origin.Z) continue;
-
-                float dz = origin.Z - z;
-
-                Vector3 intersection = origin - direction * (dz / direction.Z);
-                int tx = (int)Math.Floor(intersection.X);
-                int ty = (int)Math.Floor(intersection.Y);
-
-                if(tx>=0 && ty>=0 && tx < Map.Width && ty < Map.Height)
-                {
-                    if(Map.Tiles[tx,ty].Level == i)
-                    {
-                        return new Point(tx, ty);
-                    }
-                }
-                // Todo: maybe add some future logic to also correctly select when not pointing at a tile rectangle itself (slopes, cliffs)
+                vpct[i].Color = c;
             }
 
-            return null;
+            vpct[0].TextureCoordinate = new Vector2(tx + dtx, ty + dtx);
+            vpct[1].TextureCoordinate = new Vector2(tx + dt - dtx, ty + dtx);
+            vpct[2].TextureCoordinate = new Vector2(tx + dtx, ty + dt - dtx);
+            vpct[3].TextureCoordinate = new Vector2(tx + dt - dtx, ty + dt - dtx);
+
+            vpct[0].Position = Engine.ScreenCoord(screenLocation.X, screenLocation.Y);
+            vpct[1].Position = Engine.ScreenCoord(screenLocation.X + size, screenLocation.Y);
+            vpct[2].Position = Engine.ScreenCoord(screenLocation.X, screenLocation.Y + size);
+            vpct[3].Position = Engine.ScreenCoord(screenLocation.X + size, screenLocation.Y + size);
+
+            Engine.Draw2DColorTexturePixel(vpct, 0, 2, PrimitiveType.TriangleStrip);
+
         }
+
+        public void DrawTileIcon(int tileID, Point screenLocation, float size)
+        {
+            DrawTileIcon(tileID, screenLocation, size, Color.White);
+        }
+
 
 
 
@@ -266,6 +389,7 @@ namespace LD38
 
             // Todo: visually represent how full the storage area is.
         }
+
 
         void DrawMine(int x, int y)
         {
@@ -415,7 +539,7 @@ namespace LD38
         }
 
 
-        void RenderFlatQuad(float x1, float y1, float x2, float y2, float z, bool highlight = false)
+        void RenderFlatQuad(float x1, float y1, float x2, float y2, float z, Color c)
         {
             VertexPositionColor[] vpc = new VertexPositionColor[4];
 
@@ -424,19 +548,9 @@ namespace LD38
             vpc[1].Position = new Vector3(x2, y1, z);
             vpc[3].Position = new Vector3(x2, y2, z);
 
-            if (highlight)
+            for (int i = 0; i < 4; i++)
             {
-                for(int i=0;i<4;i++)
-                {
-                    vpc[i].Color = new Color(127, 255, 192, 128);
-                }
-            }
-            else
-            {
-                vpc[0].Color = Color.Red;
-                vpc[1].Color = Color.Green;
-                vpc[2].Color = Color.Blue;
-                vpc[3].Color = Color.White;
+                vpc[i].Color = c;
             }
 
             Engine.DrawColor(vpc, 0, 2, PrimitiveType.TriangleStrip);
@@ -601,12 +715,62 @@ namespace LD38
             AppendQuad(vpct);
         }
 
+
+
+
         Color ColorFromZValue(float z)
         {
             // 100% at +8, 80% at +0
             z = 0.6f + (float)(Math.Min(1,Math.Max(0,(z / 8))) * 0.4);
             return new Color(z, z, z);
         }
+
+
+
+        /// <summary>
+        /// Some reference for future use...
+        /// Draws a quad from x1,y1 - x2,y1 - x2,y2 - x1,y2; the 4 z values map to those locations
+        /// TileId is 0xYYXX where x is the x 16-pixel index into the texture, and y is for y. (Allow future texture expansion if necessary, probably will be)
+        /// rotate is 0-3. 0 will apply the texture so +x and +y in the tile map to +x/+y in the world space. Positive rotations rotate clockwise.
+        /// </summary>
+        public void AddRampQuadColor(int tileID, float x1, float y1, float x2, float y2, float z1, float z2, float z3, float z4, int rotate, Color c)
+        {
+            AddArbitraryQuadColor(tileID,
+                new Vector3(x1, y1, z1),
+                new Vector3(x2, y1, z2),
+                new Vector3(x2, y2, z3),
+                new Vector3(x1, y2, z4),
+                rotate, c);
+        }
+
+        // Same as AddRampQuad, but you specify the 4 points directly.
+        public void AddArbitraryQuadColor(int tileID, Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4, int rotate, Color c)
+        {
+            VertexPositionColorTexture[] vpct = new VertexPositionColorTexture[4];
+
+            float dtx = 0.001f;
+            float dt = 16.0f / MapTexture.Width;
+            float tx = (tileID & 0xFF) * dt;
+            float ty = (tileID >> 8) * dt;
+
+            for (int i = 0; i < 4; i++)
+            {
+                vpct[i].Color = c;
+            }
+            vpct[0].Position = p1;
+            vpct[1].Position = p2;
+            vpct[2].Position = p3;
+            vpct[3].Position = p4;
+
+            vpct[(4 - rotate) & 3].TextureCoordinate = new Vector2(tx + dtx, ty + dtx);
+            vpct[(5 - rotate) & 3].TextureCoordinate = new Vector2(tx + dt - dtx, ty + dtx);
+            vpct[(6 - rotate) & 3].TextureCoordinate = new Vector2(tx + dt - dtx, ty + dt - dtx);
+            vpct[(7 - rotate) & 3].TextureCoordinate = new Vector2(tx + dtx, ty + dt - dtx);
+
+            AppendQuad(vpct);
+        }
+
+
 
         public void AddTexTri(int tileID, Vector3 p1, Vector3 p2, Vector3 p3, Vector2 uv1, Vector2 uv2, Vector2 uv3)
         {

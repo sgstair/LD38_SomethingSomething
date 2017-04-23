@@ -286,20 +286,10 @@ namespace LD38
 
         public void Draw(GameTime gameTime)
         {
-            Engine.MatPerspective = Matrix.CreatePerspectiveFieldOfView((float)(Math.PI / 2), Engine.AspectRatio, 0.5f, 30) * Matrix.CreateScale(-1,1,1);
-            Engine.MatWorld = Matrix.Identity;
-            Vector3 cameraLoc = CameraLocation();
-            Engine.MatView = Matrix.CreateLookAt(cameraLoc, cameraLookAt, Vector3.UnitZ);
-            DrawMap.SetCameraLocation(cameraLoc, cameraLookAt);
-
-            BlendState bs = new BlendState();
-
-            bs.ColorBlendFunction = BlendFunction.Add;
-            bs.ColorSourceBlend = Blend.SourceAlpha;
-            bs.ColorDestinationBlend = Blend.InverseSourceAlpha;
             
-            Engine.g.BlendState = bs;
-            Engine.g.DepthStencilState = DepthStencilState.Default;
+            DrawMap.SetCameraLocation(CameraLocation(), cameraLookAt);
+
+
 
             DrawMap.DrawMap();
 

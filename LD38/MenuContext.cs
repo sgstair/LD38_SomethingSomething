@@ -74,6 +74,24 @@ namespace LD38
 
         public void Draw(GameTime gameTime)
         {
+            string title = "Something Something";
+            string subtitle = "LudumDare 38 Compo entry by sgstair";
+
+            Vector2 size = Engine.MeasureString(title);
+            float scale = (Engine.g.Viewport.Width - 200) / size.X;
+            float scale2 = (Engine.g.Viewport.Height / 3 - 70) / size.Y;
+            scale = Math.Min(scale, scale2);
+
+            float y = Engine.g.Viewport.Height / 6;
+            float x = Engine.g.Viewport.Width / 2;
+
+            Engine.DrawText(new Vector2(x, y) - size * scale * 0.5f, title, Color.White, scale);
+
+            y += size.Y * scale / 2 + 10;
+            size = Engine.MeasureString(subtitle);
+            y += size.Y / 2;
+            Engine.DrawText(new Vector2(x, y) - size * 0.5f, subtitle, Color.White);
+
 
             ui.Render();
         }

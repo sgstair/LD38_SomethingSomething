@@ -16,7 +16,7 @@ namespace LD38
         {
             new ResearchDescription()
             {
-                Name ="Archers", Description="A ranged unit", ProgressText = "Constructing targets",
+                Name ="Archers", Description="Research: A ranged unit", ProgressText = "Constructing targets",
                 Origin = TileType.Center,
                 Cost = new Requirements() { Ticks = 30*30, Wood = 20, Stone = 10 }
             },
@@ -26,7 +26,7 @@ namespace LD38
         {
             new TrainingDescription()
             {
-                Name="Worker", Description="Anything from resource harvesting to constructing buildings", ProgressText="Brainwashing",
+                Name="Worker", Description="Resource harvesting and Construction", ProgressText="Brainwashing",
                 Origin = TileType.Center, CreatedUnit = UnitType.Worker,
                 Cost = new Requirements() { Ticks = 30*8, Wood = 5, Meat = 1 }
             },
@@ -48,7 +48,7 @@ namespace LD38
         {
             new BuildingDescription()
             {
-                Name="Storage Yard", Description="Store resources closer to where they're being harvested", CreatedBuilding= TileType.Storage,
+                Name="Storage Yard", Description="Store more resources", CreatedBuilding= TileType.Storage,
                 Origin = UnitType.Worker, ProgressText = "Laying out a perfect circle",
                 Cost = new Requirements() { Wood = 10, Stone = 10, Ticks = 30*25 }
             },
@@ -132,6 +132,7 @@ namespace LD38
         public string Description;
         public string ProgressText;
         public Requirements Cost;
+        public string[] RequiredResearch;
         public override string ToString()
         {
             return string.Format($"{this.GetType().Name}({Name})");
@@ -146,14 +147,12 @@ namespace LD38
     {
         public TileType Origin;
         public UnitType CreatedUnit;
-        public string[] RequiredResearch;
     }
     class BuildingDescription : ActionDescription
     {
         public UnitType Origin;
         public TileType CreatedBuilding;
         public TileType SuitableLocation = TileType.Land;
-        public string[] RequiredResearch;
     }
     class ResourceHarvestingDescription
     {
@@ -222,6 +221,8 @@ namespace LD38
         public PlayerResources[] Resources;
         public PlayerResources[] ResourceLimit;
 
+        public int[] PlayerUnitLimit;
+
         public GameEngine(GameMap mapContext, int numPlayers)
         {
             Constants = new GameConstants();
@@ -230,11 +231,12 @@ namespace LD38
             PlayerCount = numPlayers;
             Resources = new PlayerResources[PlayerCount];
             ResourceLimit = new PlayerResources[PlayerCount];
+            PlayerUnitLimit = new int[PlayerCount];
 
             PrepareMap();
         }
 
-        const int TickRate = 30;
+        public const int TickRate = 30;
         long Tick = 0;
         double timeOverflow;
 
@@ -278,7 +280,9 @@ namespace LD38
                 if(Map[p].Content == TileType.Center)
                 {
                     if (centers == 0) SuggestCameraStartLocation = Map.CenterPoint(p);
-                    Map[p].SetOwner(centers);
+                    GameMapTile t = Map[p];
+                    t.Owner = (byte)centers;
+                    Map[p] = t;
                     centers++;
                 }
 
@@ -290,8 +294,13 @@ namespace LD38
                 }
 
             }
-            if (centers != 2) throw new Exception("Unusable map, needs 2 town centers");
+            if (centers != PlayerCount) throw new Exception("Unusable map, needs one town center per player");
             
+            // Give players initial resources
+            for(int i=0;i<PlayerCount;i++)
+            {
+                Resources[i] = Constants.InitialResources;
+            }
         }
 
 
@@ -303,14 +312,11 @@ namespace LD38
 
             List<GameQueuedWork> CompletedItems = new List<GameQueuedWork>();
             // Complete any work items that complete on this tick
-            foreach(var work in ActiveQueue.OrderBy(w => w.CompletionTick))
+            foreach(var work in ActiveQueue)
             {
-                if(work.CompletionTick <= Tick)
+                work.CompletedTicks++;
+                if(work.CompletedTicks >= work.RequiredTicks)
                 {
-                    if(work.CompletionTick < Tick)
-                    {
-                        System.Diagnostics.Debug.Print("Unexpected: Work completing before the current tick. {0}", work);
-                    }
                     CompletedItems.Add(work);
                     BusyLocations.Remove(work.QueueLocation);
                     CompleteWorkItem(work);
@@ -324,7 +330,7 @@ namespace LD38
             {
                 if(work.Active)
                 {
-                    // Only building tasks are in active currently.
+                    // Only building tasks are active in stopped queue currently. They don't receive ticks, just receive updates from workers.
                     if(work.CompletedTicks >= work.RequiredTicks)
                     {
                         CompleteWorkItem(work);
@@ -394,12 +400,15 @@ namespace LD38
         }
 
         // Synonomous with "Is Building", I guess
-        bool IsAttackable(Point tile)
+        public bool IsAttackable(Point tile)
         {
             return BuildingLookup.ContainsKey(Map[tile].Content);
         }
 
-        bool IsStructure(Point tile)
+        /// <summary>
+        /// Informational call - made available to the game
+        /// </summary>
+        public bool IsStructure(Point tile)
         {
             if (IsAttackable(tile)) return true;
             if (IsResourceTile(tile)) return true;
@@ -449,16 +458,51 @@ namespace LD38
             CompletedResearch.Add(desc.Name);
         }
 
+        bool HaveRequiredResearch(ActionDescription action)
+        {
+            if (action.RequiredResearch == null) return true; // No required research
+            foreach(string research in action.RequiredResearch)
+            {
+                if (!CompletedResearch.Contains(research)) return false; // Missing research.
+            }
+            return true;
+        }
 
+        BuildingDescription FindBuildingDescriptionForTile(Point location)
+        {
+            TileType t = Map[location].Content;
+            foreach(var d in Constants.Building)
+            {
+                if (d.CreatedBuilding == t) return d;
+            }
+            return null;
+        }
+
+
+        void DestroyBuilding(Point location)
+        {
+            // Unapply building bonuses
+
+        }
         void CancelBuilding(Point location)
         {
-
+            BuildingDescription desc = FindBuildingDescriptionForTile(location);
+            GameMapTile t = Map[location];
+            t.Content = desc.SuitableLocation;
+            Map[location] = t;
         }
         void CompleteBuilding(Point location)
         {
             BuildingProperties prop = BuildingLookup[Map[location].Content];
-            Map[location].SetBuilt(true);
-            Map[location].SetHP(prop.HP);
+            GameMapTile t = Map[location];
+            t.Built = true;
+            t.HP = prop.HP;
+            Map[location] = t;
+
+            // Apply building effects
+            int playerOwner = t.Owner;
+            PlayerUnitLimit[playerOwner] += prop.BoostPopulation;
+            ResourceLimit[playerOwner].AddResources(prop.BoostStockpile);
         }
         void StartBuilding(GameQueuedWork work)
         {
@@ -467,9 +511,9 @@ namespace LD38
             BuildingDescription desc = (BuildingDescription)work.TaskDescription;
             BuildingProperties prop = BuildingLookup[desc.CreatedBuilding];
             t.Content = desc.CreatedBuilding;
-            t.SetOwner(work.Owner);
-            t.SetHP((int)Math.Ceiling(prop.HP * Constants.HPPercentWhilebuilding));
-            t.SetBuilt(false);
+            t.Owner = (byte)(work.Owner);
+            t.HP = (int)Math.Ceiling(prop.HP * Constants.HPPercentWhilebuilding);
+            t.Built = false;
             Map[location] = t;
             work.Active = true;
         }
@@ -550,10 +594,13 @@ namespace LD38
         }
 
 
-        void CompleteHarvest(GameQueuedWork work)
+        void CompleteHarvest(GameQueuedWork work, bool giveResource = true)
         {
             // Generate resource for unit
+            if(giveResource) // If not, collection was canceled.
+            {
 
+            }
 
             // Return unit to outside world
             work.InvolvedUnit.Active = true;
@@ -599,6 +646,7 @@ namespace LD38
         /// </summary>
         void CompleteWorkItem(GameQueuedWork work)
         {
+            work.Completed = true;
             switch(work.WorkType)
             {
                 case QueuedWorkType.Construct:
@@ -619,13 +667,60 @@ namespace LD38
             }
         }
 
+
+        void CancelApplyRefund(int player, Requirements req)
+        {
+            PlayerResources res = PlayerResources.FromRequirements(req);
+            res.DiscountResources(Constants.CancelOperationRefund);
+            Resources[player].AddResources(res);
+        }
+
+        /// <summary>
+        /// Cancel a pending work item and remove it from any queues.
+        /// </summary>
+        void CancelWorkItem(GameQueuedWork work)
+        {
+            switch (work.WorkType)
+            {
+                case QueuedWorkType.Construct:
+                    // Issue partial refund
+                    CancelApplyRefund(work.Owner, ((BuildingDescription)work.TaskDescription).Cost);
+                    CancelBuilding(work.QueueLocation);
+                    break;
+                case QueuedWorkType.Harvest:
+                    CompleteHarvest(work, false);
+                    break;
+                case QueuedWorkType.Research:
+                    // Issue partial refund
+                    CancelApplyRefund(work.Owner, ((ResearchDescription)work.TaskDescription).Cost);
+                    break;
+                case QueuedWorkType.ReturnResource:
+                    CompleteDeposit(work); // Ok to cancel early, minor exploit case
+                    break;
+                case QueuedWorkType.Train:
+                    // Issue partial refund
+                    CancelApplyRefund(work.Owner, ((TrainingDescription)work.TaskDescription).Cost);
+                    break;
+            }
+
+            work.Completed = true;
+            ActiveQueue.Remove(work);
+            StoppedQueue.Remove(work);
+            if (work.Active)
+            {
+                // Remove busy building block
+                BusyLocations.Remove(work.QueueLocation);
+            }
+        }
+
+
         GameQueuedWork CreateWorkFromAction(ActionDescription action)
         {
             GameQueuedWork w = new GameQueuedWork()
             {
                 TaskDescription = action,
                 RequiredTicks = action.Cost.Ticks,
-                TaskProgressText = action.ProgressText
+                TaskProgressText = action.ProgressText + "..."
             };
 
             if(action is ResearchDescription)
@@ -665,10 +760,42 @@ namespace LD38
         // Interaction functions - Request actions from the game.
         // Below this point mostly functions do minimal interaction with state, sanity check, and call into internal functions to take action.
         //
-        public ActionDescription[] EnumerateActionsForTile(Point tileLocation)
+
+        public ResourceHarvestingDescription ResourceDetailsForTile(Point tileLocation)
+        {
+            TileType t = Map[tileLocation].Content;
+            foreach(var d in Constants.ResourceHarvesting)
+            {
+                if (d.HarvestBuilding == t) return d;
+            }
+            return null;
+        }
+
+        public BuildingProperties StructureDetailsForTile(Point tileLocation)
+        {
+            TileType t = Map[tileLocation].Content;
+            foreach (var d in Constants.BuildingDetails)
+            {
+                if (d.Building == t) return d;
+            }
+            return null;
+        }
+
+        public UnitProperties GetUnitDetails(GameUnit unit)
+        {
+            UnitType t = unit.Unit;
+            foreach(var d in Constants.UnitDetails)
+            {
+                if (d.Unit == t) return d;
+            }
+            return null;
+        }
+
+
+        public ActionDescription[] EnumerateActionsForTile(int playerId, Point tileLocation)
         {
             List<ActionDescription> actions = new List<ActionDescription>();
-            if (Map[tileLocation].Built)
+            if (Map[tileLocation].Built && Map[tileLocation].Owner == playerId)
             {
                 TileType t = Map[tileLocation].Content;
 
@@ -677,11 +804,13 @@ namespace LD38
                     if (action.Origin == t)
                     {
                         if (CompletedResearch.Contains(action.Name)) continue; // don't allow queueing completed research.
+                        if (!HaveRequiredResearch(action)) continue; // Don't include unresearched items
                         actions.Add(action);
                     }
                 }
                 foreach (var action in Constants.Training)
                 {
+                    if (!HaveRequiredResearch(action)) continue; // Don't include unresearched items
                     if (action.Origin == t) actions.Add(action);
                 }
             }
@@ -698,16 +827,16 @@ namespace LD38
             return actions.ToArray();
         }
 
-        public GameQueuedWork[] EnumerateQueueForTile(Point tileLocation)
+        public GameQueuedWork[] EnumerateQueueForTile(int playerId, Point tileLocation)
         {
             List<GameQueuedWork> queueOut = new List<GameQueuedWork>();
             foreach(var q in ActiveQueue)
             {
-                if (q.QueueLocation == tileLocation) queueOut.Add(q);
+                if (q.QueueLocation == tileLocation && q.Owner == playerId) queueOut.Add(q);
             }
             foreach(var q in StoppedQueue)
             {
-                if (q.QueueLocation == tileLocation) queueOut.Add(q);
+                if (q.QueueLocation == tileLocation && q.Owner == playerId) queueOut.Add(q);
             }
             return queueOut.ToArray();
         }
@@ -733,6 +862,11 @@ namespace LD38
                 System.Diagnostics.Debug.Print("Attempt to queue action for unbuilt structure. id {0}, location {1}, action {2}, tile {3}", playerId, tileLocation, action, t);
                 return EngineRequestStatus.FailUnspecified;
             }
+            if (!HaveRequiredResearch(action))
+            {
+                System.Diagnostics.Debug.Print("Attempt to queue unresearched action. id {0}, location {1}, action {2}, tile {3}", playerId, tileLocation, action, t);
+                return EngineRequestStatus.FailUnspecified;
+            }
             int queueLength = TileQueueLength(tileLocation);
             if (queueLength == MaxQueueLength) return EngineRequestStatus.FailQueueFull;
             if (!PlayerDeductResources(playerId, ref action.Cost))
@@ -748,13 +882,19 @@ namespace LD38
         /// </summary>
         public EngineRequestStatus QueueActionForUnit(int playerId, GameUnit unit, Point targetLocation, ActionDescription action)
         {
-            if(playerId != unit.Owner)
+            if (playerId != unit.Owner)
             {
-                System.Diagnostics.Debug.Print("Attempt to queue action for unowned unit. id {0}, unit {1}, location {2} {3}, action {4}", 
+                System.Diagnostics.Debug.Print("Attempt to queue action for unowned unit. id {0}, unit {1}, location {2} {3}, action {4}",
                     playerId, unit, targetLocation, Map[targetLocation], action);
                 return EngineRequestStatus.FailWrongPlayer;
             }
-            if(action is BuildingDescription)
+            if (!HaveRequiredResearch(action))
+            {
+                System.Diagnostics.Debug.Print("Attempt to queue unresearched action. id {0}, unit {1}, location {2} {3}, action {4}",
+                    playerId, unit, targetLocation, Map[targetLocation], action);
+                return EngineRequestStatus.FailUnspecified;
+            }
+            if (action is BuildingDescription)
             {
                 BuildingDescription desc = (BuildingDescription)action;
                 if(Map[targetLocation].Content != desc.SuitableLocation)
@@ -772,6 +912,24 @@ namespace LD38
             QueuePaidWork(playerId, targetLocation, action);
             UnitConstructTile(unit, targetLocation);
 
+            return EngineRequestStatus.Completed;
+        }
+
+        public EngineRequestStatus CancelQueueElement(int playerId, GameQueuedWork work)
+        {
+            if (playerId != work.Owner)
+            {
+                System.Diagnostics.Debug.Print("Attempt to cancel unowned queue item. id {0}, queue {1}",
+                    playerId, work);
+                return EngineRequestStatus.FailWrongPlayer;
+            }
+            if(work.Completed)
+            {
+                System.Diagnostics.Debug.Print("Attempt to cancel completed queue item. id {0}, queue {1}",
+                    playerId, work);
+                return EngineRequestStatus.FailUnspecified;
+            }
+            CancelWorkItem(work);
             return EngineRequestStatus.Completed;
         }
 
@@ -911,6 +1069,12 @@ namespace LD38
             }
         }
 
+        public static PlayerResources FromRequirements(Requirements r)
+        {
+            PlayerResources res = new PlayerResources();
+            res.AddResources(r);
+            return res;
+        }
     }
 
     struct Requirements
@@ -998,7 +1162,7 @@ namespace LD38
         public string TaskName, TaskProgressText;
 
         public bool Active;
-        public long CompletionTick;
+        public bool Completed;
         public int CompletedTicks;
         public int RequiredTicks;
         public QueuedWorkType WorkType;
@@ -1008,7 +1172,7 @@ namespace LD38
 
         public override string ToString()
         {
-            return $"GameQueuedWork({TaskName},Owner {Owner},Active {Active},Completed/Required {CompletedTicks}/{RequiredTicks},Completion {CompletionTick},{QueueLocation},{InvolvedUnit})";
+            return $"GameQueuedWork({TaskName},Owner {Owner},Active {Active},Completed/Required {CompletedTicks}/{RequiredTicks},{QueueLocation},{InvolvedUnit})";
         }
     }
 

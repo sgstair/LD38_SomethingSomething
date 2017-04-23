@@ -127,6 +127,11 @@ namespace LD38
             return CenterPoint(pt.X, pt.Y);
         }
 
+        public Point TileFromLocation(Vector3 loc)
+        {
+            return new Point((int)Math.Floor(loc.X), (int)Math.Floor(loc.Y));
+        }
+
 
         public Vector2 StructureExitPoint(int tx, int ty)
         {
@@ -155,6 +160,15 @@ namespace LD38
         public Vector2 StructureExitPoint(Point pt)
         {
             return StructureExitPoint(pt.X, pt.Y);
+        }
+
+        public Vector3 SurfaceLocation(float x, float y)
+        {
+            return new Vector3(x, y, MapHeight(x, y));
+        }
+        public Vector3 SurfaceLocation(Vector2 mapLocation)
+        {
+            return SurfaceLocation(mapLocation.X, mapLocation.Y);
         }
 
 
@@ -303,16 +317,12 @@ namespace LD38
             }
         }
 
+
+
         public int HP { get { return ResourceValue; } set { ResourceValue = value; } }
-        public void SetHP(int newHP) { HP = newHP; }
 
         public bool Built { get { return ResourceValue2 != 0; } set { ResourceValue2 = value ? 1 : 0; } }
-        public void SetBuilt(bool newBuilt) { Built = newBuilt; }
 
-        public void SetOwner(int owner)
-        {
-            Owner = (byte)owner;
-        }
 
         public void Serialize(BinaryWriter bw)
         {

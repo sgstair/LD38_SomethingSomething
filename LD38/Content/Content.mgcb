@@ -44,3 +44,6 @@
 /processorParam:TextureFormat=Compressed
 /build:font/Font.spritefont
 
+#begin Maps/Map1.mp
+/copy:Maps/Map1.mp
+

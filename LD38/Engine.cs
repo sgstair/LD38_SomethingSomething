@@ -64,6 +64,23 @@ namespace LD38
         }
 
 
+        public static void DrawScreenRect(Rectangle rc, Color color)
+        {
+            VertexPositionColor[] vpc = new VertexPositionColor[4];
+
+            for (int i = 0; i < 4; i++)
+            {
+                vpc[i].Color = color;
+            }
+            vpc[0].Position = Engine.ScreenCoord(rc.Left, rc.Top);
+            vpc[1].Position = Engine.ScreenCoord(rc.Right, rc.Top);
+            vpc[2].Position = Engine.ScreenCoord(rc.Left, rc.Bottom);
+            vpc[3].Position = Engine.ScreenCoord(rc.Right, rc.Bottom);
+
+            Engine.Draw2DColor(vpc, 0, 2, PrimitiveType.TriangleStrip);
+        }
+
+
         public static void Draw2DColor(VertexPositionColor[] vpc, int start, int count, PrimitiveType type = PrimitiveType.TriangleList)
         {
             ColorEffect.CurrentTechnique = ColorEffect.Techniques["BasicColor"];
