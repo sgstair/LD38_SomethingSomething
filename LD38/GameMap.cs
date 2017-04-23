@@ -19,8 +19,29 @@ namespace LD38
             Width = mapWidth;
             Height = mapHeight;
             Tiles = new GameMapTile[Width, Height];
-
+            RandomizeTiles();
         }
+
+        public void RandomizeTiles()
+        {
+            Random r = new Random();
+            for (int y = 0; y < Height; y++)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    int alternateCount = AlternateCount(Tiles[x, y].Content);
+                    Tiles[x, y].Rotation = (byte)r.Next(4);
+                    Tiles[x, y].Variation = (byte)r.Next(alternateCount);
+                }
+            }
+        }
+
+        public int AlternateCount(TileType t)
+        {
+            if (t == TileType.Water || t == TileType.Bridge) return 1;
+            return 3;
+        }
+
 
         /// <summary>
         /// Ramp direction for a tile. 0 = flat, 1 = top is +x, 2=+y, 3=-x, 4=-y
@@ -101,15 +122,29 @@ namespace LD38
             float z = Tiles[tx, ty].Level * LayerHeight;
             return new Vector3(tx + 0.5f, ty + 0.5f, z);
         }
+        public Vector3 CenterPoint(Point pt)
+        {
+            return CenterPoint(pt.X, pt.Y);
+        }
 
 
         public GameMapTile[,] Tiles;
 
         public GameMapTile this[int x, int y] {  get { return Tiles[x, y]; } }
-
+        public GameMapTile this[Point p] {  get { return Tiles[p.X, p.Y]; }  }
 
         const int FileMagic = 0x123456;
 
+        public IEnumerable<Point> EnumerateMap()
+        {
+            for(int y=0;y< Height;y++)
+            {
+                for(int x=0;x< Width;x++)
+                {
+                    yield return new Point(x, y);
+                }
+            }
+        }
 
         public byte[] SaveMapData()
         {
@@ -179,6 +214,7 @@ namespace LD38
         public byte Level; // 0 is the lowest level
         public byte Variation; // different variations of tiles.
         public byte Rotation; // 0-3
+        public byte Owner; // Owning team, 0-15
         public TileType Content;
         public int ResourceValue;
         public int ResourceValue2;
@@ -203,12 +239,17 @@ namespace LD38
             }
         }
 
+        public void SetOwner(int owner)
+        {
+            Owner = (byte)owner;
+        }
+
         public void Serialize(BinaryWriter bw)
         {
             bw.Write((byte)Content);
             bw.Write(Level);
             bw.Write(Variation);
-            bw.Write(Rotation);
+            bw.Write((byte)((Rotation&3)|(Owner<<4));
             bw.Write(ResourceValue);
             bw.Write(ResourceValue2);
         }
@@ -220,6 +261,8 @@ namespace LD38
             t.Level = br.ReadByte();
             t.Variation = br.ReadByte();
             t.Rotation = br.ReadByte();
+            t.Owner = (byte)(t.Rotation >> 4);
+            t.Rotation = (byte)(t.Rotation & 3);
             t.ResourceValue = br.ReadInt32();
             t.ResourceValue2 = br.ReadInt32();
             return t;

@@ -26,7 +26,7 @@ namespace LD38
         Texture2D MapTiles;
 
         UiSystem ui = new UiSystem();
-
+        Random r = new Random();
 
         enum EditorState
         {
@@ -152,6 +152,8 @@ namespace LD38
                             break;
                         case EditorState.Tool:
                             t.Content = SelectedTool;
+                            t.Rotation = (byte)r.Next(4);
+                            t.Variation = (byte)r.Next(Map.AlternateCount(t.Content));
                             break;
                     }
                     

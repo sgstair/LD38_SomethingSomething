@@ -180,12 +180,12 @@ namespace LD38
         void DrawBaseTile(int x, int y)
         {
             float z = Map.Tiles[x, y].Level * Map.LayerHeight;
-            int tile = 0;
-            int rotate = 0;
+            int tile = Map[x,y].Variation;
+            int rotate = Map[x,y].Rotation;
             if (Map.Tiles[x, y].IsFlat)
             {
                 //RenderFlatQuad(x, y, x + 1, y + 1, z);
-                WorkMesh.AddRampQuad(tile, x, y, x + 1, y + 1, z, z, z, z, rotate);
+                WorkMesh.AddRampQuad(tile, x, y, x + 1, y + 1, z, z, z, z, rotate, true);
             }
             if (Map.Tiles[x, y].Content == TileType.Water || Map.Tiles[x, y].Content == TileType.Bridge)
             {
@@ -193,7 +193,7 @@ namespace LD38
                 tile = 0x200;
                 if (Map.Tiles[x, y].Content == TileType.Bridge) tile = 0x201;
 
-                WorkMesh.AddRampQuad(tile, x, y, x + 1, y + 1, z, z, z, z, rotate);
+                WorkMesh.AddRampQuad(tile, x, y, x + 1, y + 1, z, z, z, z, rotate, true);
             }
 
             if (Map.Tiles[x, y].Content == TileType.Ramp)
@@ -203,7 +203,7 @@ namespace LD38
                 switch(Map.RampDirection(x, y))
                 {
                     case 0: // No ramp;
-                        WorkMesh.AddRampQuad(tile, x, y, x + 1, y + 1, z, z, z, z, rotate);
+                        WorkMesh.AddRampQuad(tile, x, y, x + 1, y + 1, z, z, z, z, rotate, true);
                         break;
                     case 1: // +x
                         GenerateRampGeometry(tile, x, y, x + 1, y + 1, z, z2, z2, z, rotate);
@@ -370,7 +370,7 @@ namespace LD38
 
         void GenerateRampGeometry(int tile, float x, float y, float x2, float y2, float z1, float z2, float z3, float z4, int rotate = 0)
         {
-            WorkMesh.AddRampQuad(tile, x, y, x2, y2, z1, z2, z3, z4, rotate);
+            WorkMesh.AddRampQuad(tile, x, y, x2, y2, z1, z2, z3, z4, rotate, true);
 
             // Now add cliff side triangles.
             if(z1 != z2)
@@ -557,18 +557,18 @@ namespace LD38
         /// TileId is 0xYYXX where x is the x 16-pixel index into the texture, and y is for y. (Allow future texture expansion if necessary, probably will be)
         /// rotate is 0-3. 0 will apply the texture so +x and +y in the tile map to +x/+y in the world space. Positive rotations rotate clockwise.
         /// </summary>
-        public void AddRampQuad(int tileID, float x1, float y1, float x2, float y2, float z1, float z2, float z3, float z4, int rotate = 0)
+        public void AddRampQuad(int tileID, float x1, float y1, float x2, float y2, float z1, float z2, float z3, float z4, int rotate = 0, bool gradientZ = false)
         {
             AddArbitraryQuad(tileID,
                 new Vector3(x1, y1, z1),
                 new Vector3(x2, y1, z2),
                 new Vector3(x2, y2, z3),
                 new Vector3(x1, y2, z4),
-                rotate);
+                rotate, gradientZ);
         }
 
         // Same as AddRampQuad, but you specify the 4 points directly.
-        public void AddArbitraryQuad(int tileID, Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4, int rotate = 0)
+        public void AddArbitraryQuad(int tileID, Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4, int rotate = 0, bool gradientZ=false)
         {
             VertexPositionColorTexture[] vpct = new VertexPositionColorTexture[4];
 
@@ -581,6 +581,13 @@ namespace LD38
             {
                 vpct[i].Color = Color.White;
             }
+            if(gradientZ)
+            {
+                vpct[0].Color = ColorFromZValue(p1.Z);
+                vpct[1].Color = ColorFromZValue(p2.Z);
+                vpct[2].Color = ColorFromZValue(p3.Z);
+                vpct[3].Color = ColorFromZValue(p4.Z);
+            }
             vpct[0].Position = p1;
             vpct[1].Position = p2;
             vpct[2].Position = p3;
@@ -592,6 +599,13 @@ namespace LD38
             vpct[(7 - rotate) & 3].TextureCoordinate = new Vector2(tx + dtx, ty + dt - dtx);
 
             AppendQuad(vpct);
+        }
+
+        Color ColorFromZValue(float z)
+        {
+            // 100% at +8, 80% at +0
+            z = 0.6f + (float)(Math.Min(1,Math.Max(0,(z / 8))) * 0.4);
+            return new Color(z, z, z);
         }
 
         public void AddTexTri(int tileID, Vector3 p1, Vector3 p2, Vector3 p3, Vector2 uv1, Vector2 uv2, Vector2 uv3)
