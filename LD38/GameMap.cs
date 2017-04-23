@@ -128,10 +128,69 @@ namespace LD38
         }
 
 
+        public Vector2 StructureExitPoint(int tx, int ty)
+        {
+            TileType t = Tiles[tx, ty].Content;
+            Vector2 center = new Vector2(tx + 0.5f, ty + 0.5f); // Center point
+
+            int dx, dy;
+
+            if (t == TileType.Forest)
+            {
+                return center; // Forest, appear from center.
+            }
+            else if(t == TileType.Mine)
+            {
+                // Use a point based on the mine location
+                int mineDirection = MineDirection(tx, ty);
+                GetDirection(mineDirection, out dx, out dy);
+            }
+            else
+            {
+                // Use the rotation of the tile (may need to adjust)
+                GetDirection(Tiles[tx, ty].Rotation, out dx, out dy);
+            }
+            return center + new Vector2(dx, dy) * 0.4f;
+        }
+        public Vector2 StructureExitPoint(Point pt)
+        {
+            return StructureExitPoint(pt.X, pt.Y);
+        }
+
+
+        public float MapHeight(float x, float y)
+        {
+            int tx = (int)Math.Floor(x);
+            int ty = (int)Math.Floor(y);
+            if (tx < 0 || ty < 0 || tx >= Width || ty >= Height) return 0;
+            if (Tiles[tx, ty].Content == TileType.Ramp)
+            {
+                // Tricky case
+                x -= tx;
+                y -= ty;
+                int dx, dy;
+                GetDirection(RampDirection(tx, ty), out dx, out dy);
+                float z = Tiles[tx, ty].Level * LayerHeight;
+                if (dx < 0) { dx = 1; x = 1 - x; }
+                if (dy < 0) { dy = 1; y = 1 - y; }
+                return z + x * dx + y * dy;
+            }
+            else
+            {
+                return Tiles[tx, ty].Level * LayerHeight;
+            }
+        }
+        public float MapHeight(Vector2 location)
+        {
+            return MapHeight(location.X, location.Y);
+        }
+
+
+
         public GameMapTile[,] Tiles;
 
-        public GameMapTile this[int x, int y] {  get { return Tiles[x, y]; } }
-        public GameMapTile this[Point p] {  get { return Tiles[p.X, p.Y]; }  }
+        public GameMapTile this[int x, int y] {  get { return Tiles[x, y]; } set { Tiles[x, y] = value; } }
+        public GameMapTile this[Point p] { get { return Tiles[p.X, p.Y]; } set { Tiles[p.X, p.Y] = value; } }
 
         const int FileMagic = 0x123456;
 
@@ -219,6 +278,11 @@ namespace LD38
         public int ResourceValue;
         public int ResourceValue2;
 
+        public override string ToString()
+        {
+            return string.Format($"GameMapTile({Content},{Level},Owner {Owner},{ResourceValue},{ResourceValue2}");
+        }
+
         public bool IsFlat
         {
             get
@@ -239,6 +303,12 @@ namespace LD38
             }
         }
 
+        public int HP { get { return ResourceValue; } set { ResourceValue = value; } }
+        public void SetHP(int newHP) { HP = newHP; }
+
+        public bool Built { get { return ResourceValue2 != 0; } set { ResourceValue2 = value ? 1 : 0; } }
+        public void SetBuilt(bool newBuilt) { Built = newBuilt; }
+
         public void SetOwner(int owner)
         {
             Owner = (byte)owner;
@@ -249,7 +319,7 @@ namespace LD38
             bw.Write((byte)Content);
             bw.Write(Level);
             bw.Write(Variation);
-            bw.Write((byte)((Rotation&3)|(Owner<<4));
+            bw.Write((byte)((Rotation&3)|(Owner<<4)));
             bw.Write(ResourceValue);
             bw.Write(ResourceValue2);
         }
