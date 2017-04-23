@@ -37,3 +37,10 @@
 /processorParam:TextureFormat=Color
 /build:tex/Tiles.png
 
+#begin font/Font.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:font/Font.spritefont
+

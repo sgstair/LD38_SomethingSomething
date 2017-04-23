@@ -1,6 +1,7 @@
 ﻿using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -105,6 +106,57 @@ namespace LD38
         public GameMapTile[,] Tiles;
 
         public GameMapTile this[int x, int y] {  get { return Tiles[x, y]; } }
+
+
+        const int FileMagic = 0x123456;
+
+
+        public byte[] SaveMapData()
+        {
+            MemoryStream ms = new MemoryStream();
+            BinaryWriter bw = new BinaryWriter(ms);
+
+            bw.Write(FileMagic); // Magic
+            bw.Write(Width);
+            bw.Write(Height);
+            bw.Write((int)0); // Complex buildings
+            bw.Write((int)0); // Whatever else I need to add.
+
+            for(int y=0;y< Height;y++)
+            {
+                for(int x=0;x<Width;x++)
+                {
+                    Tiles[x, y].Serialize(bw);
+                }
+            }
+
+            return ms.ToArray();
+        }
+
+        public static GameMap LoadMapData(byte[] dataStream)
+        {
+            MemoryStream ms = new MemoryStream(dataStream);
+            BinaryReader br = new BinaryReader(ms);
+
+            int magic = br.ReadInt32();
+            if (magic != FileMagic) throw new Exception("File signature incorrect");
+            int width = br.ReadInt32();
+            int height = br.ReadInt32();
+            int buildings = br.ReadInt32();
+            int reserved = br.ReadInt32();
+
+            GameMap m = new GameMap(width, height);
+
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    m.Tiles[x, y] = GameMapTile.Deserialize(br);
+                }
+            }
+            return m;
+        }
+
     }
 
     enum TileType
@@ -125,6 +177,8 @@ namespace LD38
     struct GameMapTile
     {
         public byte Level; // 0 is the lowest level
+        public byte Variation; // different variations of tiles.
+        public byte Rotation; // 0-3
         public TileType Content;
         public int ResourceValue;
         public int ResourceValue2;
@@ -147,6 +201,28 @@ namespace LD38
                 if (Content == TileType.Water) return false;
                 return true;
             }
+        }
+
+        public void Serialize(BinaryWriter bw)
+        {
+            bw.Write((byte)Content);
+            bw.Write(Level);
+            bw.Write(Variation);
+            bw.Write(Rotation);
+            bw.Write(ResourceValue);
+            bw.Write(ResourceValue2);
+        }
+
+        public static GameMapTile Deserialize(BinaryReader br)
+        {
+            GameMapTile t = new GameMapTile();
+            t.Content = (TileType)br.ReadByte();
+            t.Level = br.ReadByte();
+            t.Variation = br.ReadByte();
+            t.Rotation = br.ReadByte();
+            t.ResourceValue = br.ReadInt32();
+            t.ResourceValue2 = br.ReadInt32();
+            return t;
         }
     }
 }

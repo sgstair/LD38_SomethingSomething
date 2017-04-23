@@ -420,8 +420,8 @@ namespace LD38
             VertexPositionColor[] vpc = new VertexPositionColor[4];
 
             vpc[0].Position = new Vector3(x1, y1, z);
-            vpc[1].Position = new Vector3(x1, y2, z);
-            vpc[2].Position = new Vector3(x2, y1, z);
+            vpc[2].Position = new Vector3(x1, y2, z);
+            vpc[1].Position = new Vector3(x2, y1, z);
             vpc[3].Position = new Vector3(x2, y2, z);
 
             if (highlight)
@@ -546,7 +546,7 @@ namespace LD38
         void AppendQuad(params VertexPositionColorTexture[] vtxs)
         {
             if (vtxs.Length != 4) throw new ArgumentException("You call that a quad?");
-            int[] index = new int[] { 0, 3, 1, 1, 3, 2 };
+            int[] index = new int[] { 0, 1, 3, 1, 2, 3 };
             Append(vtxs, index);
         }
 
@@ -597,7 +597,7 @@ namespace LD38
         public void AddTexTri(int tileID, Vector3 p1, Vector3 p2, Vector3 p3, Vector2 uv1, Vector2 uv2, Vector2 uv3)
         {
             VertexPositionColorTexture[] vpct = new VertexPositionColorTexture[3];
-            int[] triIdx = new int[3] { 0, 2, 1 };
+            int[] triIdx = new int[3] { 0, 1, 2 };
 
             float dtx = 0.001f;
             float dt = 16.0f / MapTexture.Width;

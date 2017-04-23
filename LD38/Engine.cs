@@ -25,6 +25,9 @@ namespace LD38
 
         public static Texture Tex0;
 
+        static SpriteFont Font;
+        static SpriteBatch FontBatch;
+
         public static float AspectRatio
         {
             get
@@ -34,11 +37,32 @@ namespace LD38
         }
 
 
+        public static Vector3 ScreenCoord(float x, float y)
+        {
+            x = (x - g.Viewport.Width / 2) / (g.Viewport.Width / 2);
+            y = -(y - g.Viewport.Height / 2) / (g.Viewport.Height / 2);
+            return new Vector3(x, y, 0.01f);
+        }
+
         public static void LoadContent(ContentManager Content)
         {
             ColorEffect = Content.Load<Effect>("Shaders/Color");
             TextureEffect = Content.Load<Effect>("Shaders/Texture");
+            Font = Content.Load<SpriteFont>("font/Font");
+            FontBatch = new SpriteBatch(g);
         }
+
+        public static Vector2 MeasureString(string text)
+        {
+            return Font.MeasureString(text);
+        }
+        public static void DrawText(Vector2 location, string text, Color color, float scale = 1.0f)
+        {
+            FontBatch.Begin();
+            FontBatch.DrawString(Font, text, location, color, 0, Vector2.Zero, scale, SpriteEffects.None, 0);
+            FontBatch.End();
+        }
+
 
         public static void Draw2DColor(VertexPositionColor[] vpc, int start, int count, PrimitiveType type = PrimitiveType.TriangleList)
         {

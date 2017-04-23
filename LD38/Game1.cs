@@ -4,9 +4,22 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Xna.Framework.Content;
 
 namespace LD38
 {
+
+
+    public interface IGameContext
+    {
+        void LoadContent(ContentManager Content);
+
+        void UnloadContent();
+
+        void Update(GameTime gameTime);
+        void Draw(GameTime gameTime);
+    }
+
     /// <summary>
     /// This is the main type for your game.
     /// </summary>
@@ -16,7 +29,25 @@ namespace LD38
         SpriteBatch spriteBatch;
 
         GameContext game;
+        MapEditorContext editor;
+        MenuContext menu;
 
+        IGameContext ActiveContext;
+
+        public void StartGame()
+        {
+            ActiveContext = game;
+        }
+        public void StartMapEditor()
+        {
+            ActiveContext = editor;
+        }
+
+        public void StartMenu()
+        {
+            ActiveContext = menu;
+        }
+        
 
         public Game1()
         {
@@ -29,11 +60,14 @@ namespace LD38
             Content.RootDirectory = "Content";
 
             game = new GameContext(this);
-
-            
+            editor = new MapEditorContext(this);
+            menu = new MenuContext(this);
 
             //Window.AllowUserResizing = true;
             RestoreWindowLocation();
+
+            StartMenu();
+
         }
 
         /// <summary>
@@ -80,8 +114,11 @@ namespace LD38
             // Create a new SpriteBatch, which can be used to draw textures.
             spriteBatch = new SpriteBatch(GraphicsDevice);
 
+            Engine.g = GraphicsDevice;
             Engine.LoadContent(Content);
             game.LoadContent(Content);
+            editor.LoadContent(Content);
+            menu.LoadContent(Content);
 
         }
 
@@ -92,6 +129,9 @@ namespace LD38
         protected override void UnloadContent()
         {
             // TODO: Unload any non ContentManager content here
+            game.UnloadContent();
+            editor.UnloadContent();
+            menu.UnloadContent();
         }
 
         /// <summary>
@@ -113,8 +153,7 @@ namespace LD38
             if (lastKeys == null) lastKeys = curKeys;
             mouseCursor = curMouse.Position;
 
-            game.Update(gameTime);
-
+            ActiveContext.Update(gameTime);
 
             lastKeys = curKeys;
             lastMouse = curMouse;
@@ -148,13 +187,20 @@ namespace LD38
 
         public bool LeftClick()
         {
-            return curMouse.LeftButton == ButtonState.Pressed && lastMouse.LeftButton == ButtonState.Pressed;
+            return curMouse.LeftButton == ButtonState.Pressed && lastMouse.LeftButton != ButtonState.Pressed;
         }
         public bool RightClick()
         {
+            return curMouse.RightButton == ButtonState.Pressed && lastMouse.RightButton != ButtonState.Pressed;
+        }
+        public bool LeftHeld()
+        {
+            return curMouse.LeftButton == ButtonState.Pressed && lastMouse.LeftButton == ButtonState.Pressed;
+        }
+        public bool RightHeld()
+        {
             return curMouse.RightButton == ButtonState.Pressed && lastMouse.RightButton == ButtonState.Pressed;
         }
-
 
         /// <summary>
         /// This is called when the game should draw itself.
@@ -166,8 +212,7 @@ namespace LD38
             GraphicsDevice.Clear(Color.CornflowerBlue);
 
 
-            game.Draw(gameTime);
-
+            ActiveContext.Draw(gameTime);
 
 
             if (mouseCursor != null)
