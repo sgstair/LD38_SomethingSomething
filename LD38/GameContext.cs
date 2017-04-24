@@ -51,6 +51,18 @@ namespace LD38
             PlayerIndex = 0;
         }
 
+        public void SetupGame(byte[] mapData)
+        {
+
+            Map = GameMap.LoadMapData(mapData);
+            DrawMap = new MapRenderer(Map, MapTiles);
+            Eng = new GameEngine(Map, 2);
+            cameraLookAt = Eng.SuggestCameraStartLocation;
+            cameraSmoothLookAt = cameraLookAt;
+            PlayerIndex = 0;
+        }
+
+
 
         public void LoadContent(ContentManager Content)
         {
@@ -209,7 +221,7 @@ namespace LD38
                 float percent = feedbackPanel.index / 15.0f;
                 Color c = new Color(0f, 0f, 0f, (1 - percent) * 0.7f);
                 if (feedbackPanel.Failed) c.R = 255;
-                DrawUiRect(feedbackPanel, c, 1 + percent * 0.3f);
+                DrawUiRect(feedbackPanel, c, 1 + percent * 0.0f);
                 feedbackPanel.index++;
                 if(feedbackPanel.index >= 16) feedbackPanel = null;
             }
@@ -238,7 +250,12 @@ namespace LD38
                     {
                         // Get unit details
                         bool enemy = selectedUnit.Owner != PlayerIndex;
+                        UnitProperties up = Eng.GetUnitDetails(selectedUnit);
 
+                        title = up.Name;
+                        if (enemy) { title = "Enemy " + title; }
+                        curHp = selectedUnit.HP;
+                        totalHp = up.HP;
                     }
                     if(selectedTile != null)
                     {
@@ -462,6 +479,16 @@ namespace LD38
                 tileHighlight = null;
 
                 // Can we snap to a unit at this location?
+                Vector2 mapLocation = new Vector2(mouseLocation.X, mouseLocation.Y);
+                GameUnit nearestUnit = Eng.FindNearestUnit(mapLocation);
+                if(nearestUnit != null)
+                {
+                    float distance = (mapLocation - nearestUnit.Location).Length();
+                    if (distance < 0.25f)
+                    {
+                        highlightUnit = nearestUnit;
+                    }
+                }
 
                 // if no, can we snap to an interesting structure at this location?
                 if (highlightUnit == null && DrawMap.IsInsideMap(mouseLocation))
@@ -498,6 +525,41 @@ namespace LD38
                         {
                             SelectTile(tileHighlight.Value);
                         }
+                    }
+                }
+
+                if(Parent.RightClick())
+                {
+                    if(hoverPanel == null)
+                    {
+                        if(selectedUnit != null)
+                        {
+                            bool didInteract = false;
+                            if (highlightUnit != null)
+                            {
+                                // Attempt to attack unit
+                                Eng.AttackUnit(PlayerIndex, selectedUnit, highlightUnit);
+                                didInteract = true;
+                            }
+                            else if (tileHighlight != null)
+                            {
+                                if (Eng.CanInteractWithTile(selectedUnit, tileHighlight.Value))
+                                {
+                                    Eng.RequestInteractWithTile(PlayerIndex, selectedUnit, tileHighlight.Value);
+                                    didInteract = true;
+                                }
+                            }
+                            if(!didInteract)
+                            {
+                                if (DrawMap.IsInsideMap(mouseLocation))
+                                {
+                                    // Just try to move to the location.
+                                    Eng.MoveUnit(PlayerIndex, selectedUnit, mapLocation);
+                                }
+                            }
+                        }
+
+
                     }
                 }
 
@@ -585,15 +647,16 @@ namespace LD38
 
             DrawMap.DrawMap();
 
+            DrawMap.DrawUnits(Eng);
 
             // Drawing transparent layers in a specific order for proper layering
             if(selectedUnit != null)
             {
                 bool enemy = selectedUnit.Owner != PlayerIndex;
-                DrawMap.DrawSelectionCursor(mouseLocation, 0.5f, enemy?Color.Red:Color.Green);
+                DrawMap.DrawSelectionCursor(Map.SurfaceLocation(selectedUnit.Location), 0.5f, enemy?Color.Red:Color.DarkSeaGreen);
             }
 
-            if(tileHighlight != null)
+            if (tileHighlight != null)
             {
                 // Render later, but prevent rendering other selection cues.
             }
@@ -605,7 +668,7 @@ namespace LD38
             }
             else if(DrawMap.IsInsideMap(mouseLocation))
             {
-                DrawMap.DrawSelectionCursor(mouseLocation, 0.3f, Color.Blue, 0.005f);
+                DrawMap.DrawSelectionCursor(mouseLocation, 0.3f, Color.Blue, 0.01f);
             }
 
             if (tileHighlight == selectedTile && tileHighlight != null)

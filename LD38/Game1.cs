@@ -39,6 +39,12 @@ namespace LD38
             ActiveContext = game;
             game.SetupGame(Content, "Maps/Map1.mp");
         }
+        public void StartGameSavedMap(byte[] mapData)
+        {
+            game.SetupGame(mapData);
+            ActiveContext = game;
+        }
+
         public void StartMapEditor()
         {
             ActiveContext = editor;
@@ -86,11 +92,14 @@ namespace LD38
 
         protected override void OnExiting(object sender, EventArgs args)
         {
-            // Save window position for next run.
-            Properties.Settings.Default.WindowX = Window.Position.X;
-            Properties.Settings.Default.WindowY = Window.Position.Y;
-            Properties.Settings.Default.HaveWindowPosition = true;
-            Properties.Settings.Default.Save();
+            if (Window != null)
+            {
+                // Save window position for next run.
+                Properties.Settings.Default.WindowX = Window.Position.X;
+                Properties.Settings.Default.WindowY = Window.Position.Y;
+                Properties.Settings.Default.HaveWindowPosition = true;
+                Properties.Settings.Default.Save();
+            }
 
             base.OnExiting(sender, args);
         }

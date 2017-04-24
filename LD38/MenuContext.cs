@@ -19,13 +19,18 @@ namespace LD38
             Parent = rootGame;
         }
 
-
+        string exceptionText = "";
+        const string MapName = "SavedMap.mp";
         float buttony;
         void SetupButtons()
         {
             ui.Reset();
             buttony = Engine.g.Viewport.Height / 3;
             AddButton("Start Game", ClickStartGame);
+            if(System.IO.File.Exists(MapName))
+            {
+                AddButton("Start Saved Map", ClickStartMap);
+            }
             AddButton("Map Editor", ClickMapEditor);
             AddButton("Exit", ClickExit);
         }
@@ -43,6 +48,18 @@ namespace LD38
         void ClickStartGame(UiButton b)
         {
             Parent.StartGame();
+        }
+        void ClickStartMap(UiButton b)
+        {
+            try
+            {
+                byte[] mapData = System.IO.File.ReadAllBytes(MapName);
+                Parent.StartGameSavedMap(mapData);
+            }
+            catch(Exception ex)
+            {
+                exceptionText = "Map failed to launch\n" + ex.ToString();
+            }
         }
         void ClickMapEditor(UiButton b)
         {
@@ -91,6 +108,8 @@ namespace LD38
             size = Engine.MeasureString(subtitle);
             y += size.Y / 2;
             Engine.DrawText(new Vector2(x, y) - size * 0.5f, subtitle, Color.White);
+
+            Engine.DrawText(new Vector2(10, buttony + 10), exceptionText, Color.Red);
 
 
             ui.Render();

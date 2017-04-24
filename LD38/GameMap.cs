@@ -117,6 +117,49 @@ namespace LD38
             }
         }
 
+        public Point RampAttachesTo(Point rampLocation)
+        {
+            int direction = RampDirection(rampLocation.X, rampLocation.Y);
+            int dx, dy;
+            GetDirection(direction, out dx, out dy);
+            return new Point(rampLocation.X + dx, rampLocation.Y + dy);
+        }
+
+        public bool InsideMap(Point tileLocation)
+        {
+            return (tileLocation.X >= 0 && tileLocation.Y >= 0 && tileLocation.X < Width && tileLocation.Y < Height);
+        }
+        public bool CanNavigate(Point tile1, Point tile2)
+        {
+            if (!InsideMap(tile1) || !InsideMap(tile2)) return false;
+            if (!this[tile1].IsNavigable || !this[tile2].IsNavigable) return false;
+            if (this[tile1].Level == this[tile2].Level) return true;
+            if (this[tile1].Level + 1 == this[tile2].Level)
+            {
+                if (this[tile1].Content == TileType.Ramp && RampAttachesTo(tile1) == tile2) return true;
+            }
+            if (this[tile1].Level == this[tile2].Level + 1)
+            {
+                if (this[tile2].Content == TileType.Ramp && RampAttachesTo(tile2) == tile1) return true;
+            }
+            return false;
+        }
+
+        public IEnumerable<Point> PathableTiles(Point startTile)
+        {
+            for(int i=1;i<=4;i++)
+            {
+                int dx, dy;
+                GetDirection(i, out dx, out dy);
+                Point otherTile = new Point(startTile.X + dx, startTile.Y + dy);
+                if(CanNavigate(startTile, otherTile))
+                {
+                    yield return otherTile;
+                }
+            }
+        }
+
+
         public Vector3 CenterPoint(int tx, int ty)
         {
             float z = Tiles[tx, ty].Level * LayerHeight;

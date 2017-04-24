@@ -216,12 +216,15 @@ namespace LD38
     class GameEngine
     {
         GameConstants Constants;
-        GameMap Map;
+        public GameMap Map;
         public readonly int PlayerCount;
         public PlayerResources[] Resources;
         public PlayerResources[] ResourceLimit;
 
         public int[] PlayerUnitLimit;
+
+        public Random PathFinderRandom = new Random(); // Future, make this predictable (seed from tick / game id)
+        public PathFinder Pather;
 
         public GameEngine(GameMap mapContext, int numPlayers)
         {
@@ -232,6 +235,7 @@ namespace LD38
             Resources = new PlayerResources[PlayerCount];
             ResourceLimit = new PlayerResources[PlayerCount];
             PlayerUnitLimit = new int[PlayerCount];
+            Pather = new PathFinder(this);
 
             PrepareMap();
         }
@@ -310,6 +314,9 @@ namespace LD38
         {
             Tick++;
 
+            // Test pathfinder
+            //Route testRoute = Pather.FindRouteToNearestLocation(new Vector2(1.3f, 1.7f), new Vector2(8.2f, 4.3f));
+
             List<GameQueuedWork> CompletedItems = new List<GameQueuedWork>();
             // Complete any work items that complete on this tick
             foreach(var work in ActiveQueue)
@@ -353,14 +360,76 @@ namespace LD38
             foreach (var work in CompletedItems) { StoppedQueue.Remove(work); }
 
             // Process all the unit actions
-
+            foreach(GameUnit u in Units)
+            {
+                UpdateUnit(u);
+            }
         }
+
+
+        void UpdateUnit(GameUnit u)
+        {
+            UnitProperties prop = UnitLookup[u.Unit];
+
+            int intSpeed = prop.Speed;
+
+            float unitSpeed = intSpeed / 256.0f / TickRate;
+
+            bool doMove = false;
+            switch(u.Task)
+            {
+                case UnitTask.Idle:
+                    u.IdleCounter++;
+                    // Maybe eventually do something
+                    break;
+
+                case UnitTask.Move:
+                    doMove = true;
+                    if (u.CurrentRoute == null)
+                        u.SetTask(UnitTask.Idle);
+                    break;
+
+                case UnitTask.Gather:
+                    // If can enter building, do
+                    // otherwise move
+                    doMove = true;
+                    break;
+
+                case UnitTask.AttackBuilding:
+                    // If can attack building, do
+                    // otherwise move
+                    doMove = true;
+                    break;
+
+                case UnitTask.AttackUnit:
+                    // If can attack unit, do
+                    // otherwise move
+                    doMove = true;
+                    break;
+            }
+
+            // Move unit when not idle
+            if (doMove && u.CurrentRoute != null)
+            {
+                // Advance unit through route.
+                u.CurrentRoute.Advance(unitSpeed);
+                u.SetLocation(u.CurrentRoute.CurrentPosition);
+                if(u.CurrentRoute.PathLength == 0)
+                {
+                    u.CurrentRoute = null;
+                }
+            }
+        }
+
+
+
 
         const int MaxQueueLength = 3;
         List<GameQueuedWork> ActiveQueue = new List<GameQueuedWork>();
         List<GameQueuedWork> StoppedQueue = new List<GameQueuedWork>();
 
         HashSet<string> CompletedResearch = new HashSet<string>();
+        HashSet<string> InProgressResearch = new HashSet<string>();
         HashSet<Point> BusyLocations = new HashSet<Point>();
 
         public List<GameUnit> Units = new List<GameUnit>();
@@ -448,14 +517,18 @@ namespace LD38
         }
         void PlayerRefundResources(int player, ref Requirements Cost)
         {
+            PlayerRefundResources(player, PlayerResources.FromRequirements(Cost));
+        }
+        void PlayerRefundResources(int player, PlayerResources Cost)
+        {
             Resources[player].AddResources(Cost);
         }
-
 
         void CompleteResearch(GameQueuedWork work)
         {
             ResearchDescription desc = (ResearchDescription)work.TaskDescription;
             CompletedResearch.Add(desc.Name);
+            InProgressResearch.Remove(desc.Name);
         }
 
         bool HaveRequiredResearch(ActionDescription action)
@@ -538,13 +611,30 @@ namespace LD38
 
         void UnitReturnToStorage(GameUnit unit)
         {
-            // Find nearest storage and path to it (ask pathfinder to find nearest from a list)
+            // Generate list of storage locations for this player in the map
+            List<Vector2> Locations = new List<Vector2>();
+            foreach(Point p in Map.EnumerateMap())
+            {
+                if(Map[p].Content == TileType.Center || Map[p].Content == TileType.Storage)
+                {
+                    Locations.Add(Map.StructureExitPoint(p));
+                }
+            }
+
+            unit.CurrentRoute = Pather.FindRouteToNearestLocation(unit.Location, Locations.ToArray());
+            if (unit.CurrentRoute != null)
+            {
+                unit.TargetLocation = unit.CurrentRoute.TargetPosition;
+                unit.TargetTile = new Point((int)Math.Floor(unit.TargetLocation.X), (int)Math.Floor(unit.TargetLocation.Y));
+            }
+
         }
 
         void UnitPathToLocation(GameUnit unit, Vector2 mapLocation)
         {
             unit.TargetLocation = mapLocation;
-
+            unit.CurrentRoute = Pather.FindRouteToNearestLocation(unit.Location, mapLocation);
+            System.Diagnostics.Debug.Print("PathToLocation({0} => {1}, {2})", unit.Location, mapLocation, unit.CurrentRoute);
         }
 
         void UnitPathToTile(GameUnit unit, Point tileLocation)
@@ -637,6 +727,9 @@ namespace LD38
                 case QueuedWorkType.Construct:
                     StartBuilding(work);
                     break;
+                case QueuedWorkType.Research:
+                    InProgressResearch.Add(((ResearchDescription)work.TaskDescription).Name);
+                    break;
             }
             StoppedQueue.Add(work);
         }
@@ -672,7 +765,7 @@ namespace LD38
         {
             PlayerResources res = PlayerResources.FromRequirements(req);
             res.DiscountResources(Constants.CancelOperationRefund);
-            Resources[player].AddResources(res);
+            PlayerRefundResources(player, res);
         }
 
         /// <summary>
@@ -693,6 +786,7 @@ namespace LD38
                 case QueuedWorkType.Research:
                     // Issue partial refund
                     CancelApplyRefund(work.Owner, ((ResearchDescription)work.TaskDescription).Cost);
+                    InProgressResearch.Remove(((ResearchDescription)work.TaskDescription).Name);
                     break;
                 case QueuedWorkType.ReturnResource:
                     CompleteDeposit(work); // Ok to cancel early, minor exploit case
@@ -792,6 +886,27 @@ namespace LD38
         }
 
 
+        public GameUnit FindNearestUnit(Vector2 location)
+        {
+            float nearest = 100;
+            GameUnit nu = null;
+            foreach(GameUnit u in Units)
+            {
+                float distance = (location - u.Location).Length();
+                System.Diagnostics.Debug.Print("{0} => {1}", u.ToString(), distance);
+                if (distance < nearest)
+                {
+                    nu = u;
+                    nearest = distance;
+                }
+            }
+            if (nu != null)
+            {
+                System.Diagnostics.Debug.Print(nu.ToString());
+            }
+            return nu;
+        }
+
         public ActionDescription[] EnumerateActionsForTile(int playerId, Point tileLocation)
         {
             List<ActionDescription> actions = new List<ActionDescription>();
@@ -803,6 +918,7 @@ namespace LD38
                 {
                     if (action.Origin == t)
                     {
+                        if (InProgressResearch.Contains(action.Name)) continue; // don't allow researching twice.
                         if (CompletedResearch.Contains(action.Name)) continue; // don't allow queueing completed research.
                         if (!HaveRequiredResearch(action)) continue; // Don't include unresearched items
                         actions.Add(action);
@@ -1129,6 +1245,9 @@ namespace LD38
         public ResourceType ResourceLoad;
 
         public int IdleCounter;
+        public int AnimationCounter;
+
+        public Route CurrentRoute;
 
         public override string ToString()
         {

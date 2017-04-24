@@ -227,6 +227,25 @@ namespace LD38
 
         }
 
+        public void DrawUnits(GameEngine eng)
+        {
+
+            foreach(GameUnit u in eng.Units)
+            {
+                if(u.Active)
+                {
+                    Vector3 basePoint = Map.SurfaceLocation(u.Location);
+                    int tile = 0x700;
+                    if (u.Unit != UnitType.Worker) tile = 0x702;
+
+                    QueueBillboard(basePoint, tile, 0.6f, 0.6f, 0);
+                }
+            }
+        }
+
+
+
+
         public void DrawBillboards()
         {
             WorkMesh.Clear();
